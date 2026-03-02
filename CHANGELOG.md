@@ -7,6 +7,49 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.7.8] - 2026-03-02
+
+### Added
+
+#### Shell Init Delay
+- **`runtime.shellInitDelayMs`** config option — configurable delay between tmux session creation and TUI readiness polling, giving slow shells (oh-my-zsh, nvm, starship, etc.) time to initialize before the agent command starts
+- Applied to both `ov sling` and `ov coordinator start` spawn paths
+- Validation: must be non-negative number; values above 30s trigger a warning
+
+#### `--base-branch` Flag for `ov sling`
+- **`ov sling --base-branch <branch>`** — override the base branch for worktree creation instead of using the canonical branch
+- Resolution order: `--base-branch` flag > current HEAD > `config.project.canonicalBranch`
+- New `getCurrentBranch()` helper in `src/commands/sling.ts`
+
+#### Token Snapshot Run Tracking
+- **`run_id`** column added to `token_snapshots` table — snapshots are now tagged with the active run ID when recorded
+- `getLatestSnapshots()` accepts optional `runId` parameter to filter snapshots by run
+- `ov costs --live` now scopes to current run when `--run` is provided
+- Migration `migrateSnapshotRunIdColumn()` safely adds the column to existing databases
+
+#### Tmux Session State Detection
+- **`checkSessionState()`** in `src/worktree/tmux.ts` — detailed session state reporting that distinguishes `"alive"`, `"dead"`, and `"no_server"` states (vs the boolean `isSessionAlive()`)
+- Used by coordinator to provide targeted error messages and clean up stale sessions
+
+### Fixed
+
+#### Coordinator Zombie Detection
+- **`src/commands/coordinator.ts`** — `ov coordinator start` now detects zombie coordinator sessions (tmux pane exists but agent process has exited) and automatically reclaims them instead of blocking with "already running"
+- Stale sessions where tmux is dead or server is not running are now cleaned up before re-spawning
+- Handles pid-null edge case (sessions from older schema) conservatively
+
+#### Shell Init Delay Validation
+- **`src/config.ts`** — validates `shellInitDelayMs` is a non-negative finite number; warns on values above 30s; falls back to default (0) on invalid input
+
+### Testing
+- 2830 tests across 90 files (6689 `expect()` calls)
+- **`src/metrics/pricing.test.ts`** — new test suite covering `getPricingForModel()` and `estimateCost()`
+- **`src/metrics/store.test.ts`** — snapshot run_id recording and filtering tests
+- **`src/commands/coordinator.test.ts`** — zombie detection, stale session cleanup, and pid-null edge case tests
+- **`src/commands/sling.test.ts`** — `--base-branch` flag and `getCurrentBranch()` tests
+- **`src/config.test.ts`** — `shellInitDelayMs` validation tests
+- **`src/worktree/tmux.test.ts`** — `checkSessionState()` tests
+
 ## [0.7.7] - 2026-02-27
 
 ### Added
@@ -1199,7 +1242,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Biome configuration for formatting and linting
 - TypeScript strict mode with `noUncheckedIndexedAccess`
 
-[Unreleased]: https://github.com/jayminwest/overstory/compare/v0.7.7...HEAD
+[Unreleased]: https://github.com/jayminwest/overstory/compare/v0.7.8...HEAD
+[0.7.8]: https://github.com/jayminwest/overstory/compare/v0.7.7...v0.7.8
 [0.7.7]: https://github.com/jayminwest/overstory/compare/v0.7.6...v0.7.7
 [0.7.6]: https://github.com/jayminwest/overstory/compare/v0.7.5...v0.7.6
 [0.7.5]: https://github.com/jayminwest/overstory/compare/v0.7.4...v0.7.5
