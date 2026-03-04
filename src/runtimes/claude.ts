@@ -2,6 +2,7 @@
 // Pure extraction — no new behavior. All implementation delegates to existing code.
 // Phase 0: file exists and compiles. Callers are not rewired until Phase 2.
 
+import { readFileSync } from "node:fs";
 import { mkdir } from "node:fs/promises";
 import { join } from "node:path";
 import { deployHooks } from "../agents/hooks-deployer.ts";
@@ -54,19 +55,38 @@ export class ClaudeRuntime implements AgentRuntime {
 		const permMode = opts.permissionMode === "bypass" ? "bypassPermissions" : "default";
 		let cmd = `claude --model ${opts.model} --permission-mode ${permMode}`;
 
-		if (opts.appendSystemPromptFile) {
-			// Read from file at shell expansion time — avoids tmux IPC message size
-			// limits (~8-16KB) that cause "command too long" errors when large agent
-			// definitions are inlined. The $(cat ...) expands inside the tmux pane's
-			// shell, so the tmux IPC message only carries the short command string.
-			const escaped = opts.appendSystemPromptFile.replace(/'/g, "'\\''");
-			cmd += ` --append-system-prompt "$(cat '${escaped}')"`;
-		} else if (opts.appendSystemPrompt) {
-			// Single-quote the content for safe shell expansion.
-			// POSIX single-quoted strings cannot contain single quotes, so escape
-			// them using the standard technique: end quote, escaped quote, start quote.
-			const escaped = opts.appendSystemPrompt.replace(/'/g, "'\\''");
-			cmd += ` --append-system-prompt '${escaped}'`;
+		if (process.platform === "win32") {
+			// Windows: read file content eagerly since $(cat ...) is POSIX-only.
+			// No tmux IPC size limit applies — Bun.spawn passes args directly.
+			if (opts.appendSystemPromptFile) {
+				try {
+					const content = readFileSync(opts.appendSystemPromptFile, "utf-8");
+					if (content) {
+						const escaped = content.replace(/"/g, '\\"');
+						cmd += ` --append-system-prompt "${escaped}"`;
+					}
+				} catch {
+					// File not found — skip system prompt
+				}
+			} else if (opts.appendSystemPrompt) {
+				const escaped = opts.appendSystemPrompt.replace(/"/g, '\\"');
+				cmd += ` --append-system-prompt "${escaped}"`;
+			}
+		} else {
+			if (opts.appendSystemPromptFile) {
+				// Read from file at shell expansion time — avoids tmux IPC message size
+				// limits (~8-16KB) that cause "command too long" errors when large agent
+				// definitions are inlined. The $(cat ...) expands inside the tmux pane's
+				// shell, so the tmux IPC message only carries the short command string.
+				const escaped = opts.appendSystemPromptFile.replace(/'/g, "'\\''");
+				cmd += ` --append-system-prompt "$(cat '${escaped}')"`;
+			} else if (opts.appendSystemPrompt) {
+				// Single-quote the content for safe shell expansion.
+				// POSIX single-quoted strings cannot contain single quotes, so escape
+				// them using the standard technique: end quote, escaped quote, start quote.
+				const escaped = opts.appendSystemPrompt.replace(/'/g, "'\\''");
+				cmd += ` --append-system-prompt '${escaped}'`;
+			}
 		}
 
 		return cmd;
