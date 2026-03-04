@@ -29,17 +29,8 @@ import { createRunStore } from "../sessions/store.ts";
 import { resolveBackend, trackerCliName } from "../tracker/factory.ts";
 import type { AgentSession } from "../types.ts";
 import { isProcessRunning } from "../watchdog/health.ts";
-import type { SessionState } from "../worktree/tmux.ts";
-import {
-	capturePaneContent,
-	checkSessionState,
-	createSession,
-	ensureTmuxAvailable,
-	isSessionAlive,
-	killSession,
-	sendKeys,
-	waitForTuiReady,
-} from "../worktree/tmux.ts";
+import { getSessionManager } from "../worktree/session-factory.ts";
+import type { SessionState } from "../worktree/session-manager.ts";
 import { nudgeAgent } from "./nudge.ts";
 import { isRunningAsRoot } from "./sling.ts";
 
@@ -294,14 +285,21 @@ async function startCoordinator(
 	opts: { json: boolean; attach: boolean; watchdog: boolean; monitor: boolean },
 	deps: CoordinatorDeps = {},
 ): Promise<void> {
+	const sm = await getSessionManager();
 	const tmux = deps._tmux ?? {
-		createSession,
-		isSessionAlive,
-		checkSessionState,
-		killSession,
-		sendKeys,
-		waitForTuiReady,
-		ensureTmuxAvailable,
+		createSession: (name: string, cwd: string, command: string, env?: Record<string, string>) =>
+			sm.createSession(name, cwd, command, env),
+		isSessionAlive: (name: string) => sm.isSessionAlive(name),
+		checkSessionState: (name: string) => sm.checkSessionState(name),
+		killSession: (name: string) => sm.killSession(name),
+		sendKeys: (name: string, keys: string) => sm.sendKeys(name, keys),
+		waitForTuiReady: (
+			name: string,
+			detectReady: (paneContent: string) => import("../runtimes/types.ts").ReadyState,
+			timeoutMs?: number,
+			pollIntervalMs?: number,
+		) => sm.waitForTuiReady(name, detectReady, timeoutMs, pollIntervalMs),
+		ensureTmuxAvailable: () => sm.ensureAvailable(),
 	};
 
 	const { json, attach: shouldAttach, watchdog: watchdogFlag, monitor: monitorFlag } = opts;
@@ -539,9 +537,37 @@ async function startCoordinator(
 		}
 
 		if (shouldAttach) {
-			Bun.spawnSync(["tmux", "attach-session", "-t", tmuxSession], {
-				stdio: ["inherit", "inherit", "inherit"],
-			});
+			if (process.platform === "win32") {
+				// Windows: open a new terminal window tailing the coordinator output.
+				// Unlike tmux attach (which takes over the current terminal), Windows
+				// spawns a separate console window showing the live output stream.
+				// Users interact via `ov coordinator send` or `ov nudge coordinator`.
+				Bun.spawn(
+					[
+						"cmd",
+						"/c",
+						"start",
+						`Coordinator: ${tmuxSession}`,
+						"cmd",
+						"/k",
+						"ov",
+						"coordinator",
+						"output",
+						"--follow",
+					],
+					{
+						cwd: projectRoot,
+					},
+				);
+				if (!json) {
+					printHint("Opened coordinator output in a new terminal window");
+					printHint("Send messages with: ov coordinator send --subject '...' '...'");
+				}
+			} else {
+				Bun.spawnSync(["tmux", "attach-session", "-t", tmuxSession], {
+					stdio: ["inherit", "inherit", "inherit"],
+				});
+			}
 		}
 	} finally {
 		store.close();
@@ -557,14 +583,21 @@ async function startCoordinator(
  * 4. Auto-complete the active run (if current-run.txt exists)
  */
 async function stopCoordinator(opts: { json: boolean }, deps: CoordinatorDeps = {}): Promise<void> {
+	const sm = await getSessionManager();
 	const tmux = deps._tmux ?? {
-		createSession,
-		isSessionAlive,
-		checkSessionState,
-		killSession,
-		sendKeys,
-		waitForTuiReady,
-		ensureTmuxAvailable,
+		createSession: (name: string, cwd: string, command: string, env?: Record<string, string>) =>
+			sm.createSession(name, cwd, command, env),
+		isSessionAlive: (name: string) => sm.isSessionAlive(name),
+		checkSessionState: (name: string) => sm.checkSessionState(name),
+		killSession: (name: string) => sm.killSession(name),
+		sendKeys: (name: string, keys: string) => sm.sendKeys(name, keys),
+		waitForTuiReady: (
+			name: string,
+			detectReady: (paneContent: string) => import("../runtimes/types.ts").ReadyState,
+			timeoutMs?: number,
+			pollIntervalMs?: number,
+		) => sm.waitForTuiReady(name, detectReady, timeoutMs, pollIntervalMs),
+		ensureTmuxAvailable: () => sm.ensureAvailable(),
 	};
 
 	const { json } = opts;
@@ -672,14 +705,21 @@ async function statusCoordinator(
 	opts: { json: boolean },
 	deps: CoordinatorDeps = {},
 ): Promise<void> {
+	const sm = await getSessionManager();
 	const tmux = deps._tmux ?? {
-		createSession,
-		isSessionAlive,
-		checkSessionState,
-		killSession,
-		sendKeys,
-		waitForTuiReady,
-		ensureTmuxAvailable,
+		createSession: (name: string, cwd: string, command: string, env?: Record<string, string>) =>
+			sm.createSession(name, cwd, command, env),
+		isSessionAlive: (name: string) => sm.isSessionAlive(name),
+		checkSessionState: (name: string) => sm.checkSessionState(name),
+		killSession: (name: string) => sm.killSession(name),
+		sendKeys: (name: string, keys: string) => sm.sendKeys(name, keys),
+		waitForTuiReady: (
+			name: string,
+			detectReady: (paneContent: string) => import("../runtimes/types.ts").ReadyState,
+			timeoutMs?: number,
+			pollIntervalMs?: number,
+		) => sm.waitForTuiReady(name, detectReady, timeoutMs, pollIntervalMs),
+		ensureTmuxAvailable: () => sm.ensureAvailable(),
 	};
 
 	const { json } = opts;
@@ -768,14 +808,21 @@ async function sendToCoordinator(
 	opts: { subject: string; json: boolean },
 	deps: CoordinatorDeps = {},
 ): Promise<void> {
+	const sm = await getSessionManager();
 	const tmux = deps._tmux ?? {
-		createSession,
-		isSessionAlive,
-		checkSessionState,
-		killSession,
-		sendKeys,
-		waitForTuiReady,
-		ensureTmuxAvailable,
+		createSession: (name: string, cwd: string, command: string, env?: Record<string, string>) =>
+			sm.createSession(name, cwd, command, env),
+		isSessionAlive: (name: string) => sm.isSessionAlive(name),
+		checkSessionState: (name: string) => sm.checkSessionState(name),
+		killSession: (name: string) => sm.killSession(name),
+		sendKeys: (name: string, keys: string) => sm.sendKeys(name, keys),
+		waitForTuiReady: (
+			name: string,
+			detectReady: (paneContent: string) => import("../runtimes/types.ts").ReadyState,
+			timeoutMs?: number,
+			pollIntervalMs?: number,
+		) => sm.waitForTuiReady(name, detectReady, timeoutMs, pollIntervalMs),
+		ensureTmuxAvailable: () => sm.ensureAvailable(),
 	};
 	const nudge = deps._nudge ?? nudgeAgent;
 
@@ -860,14 +907,21 @@ export async function askCoordinator(
 	opts: { subject: string; timeout: number; json: boolean },
 	deps: CoordinatorDeps = {},
 ): Promise<void> {
+	const sm = await getSessionManager();
 	const tmux = deps._tmux ?? {
-		createSession,
-		isSessionAlive,
-		checkSessionState,
-		killSession,
-		sendKeys,
-		waitForTuiReady,
-		ensureTmuxAvailable,
+		createSession: (name: string, cwd: string, command: string, env?: Record<string, string>) =>
+			sm.createSession(name, cwd, command, env),
+		isSessionAlive: (name: string) => sm.isSessionAlive(name),
+		checkSessionState: (name: string) => sm.checkSessionState(name),
+		killSession: (name: string) => sm.killSession(name),
+		sendKeys: (name: string, keys: string) => sm.sendKeys(name, keys),
+		waitForTuiReady: (
+			name: string,
+			detectReady: (paneContent: string) => import("../runtimes/types.ts").ReadyState,
+			timeoutMs?: number,
+			pollIntervalMs?: number,
+		) => sm.waitForTuiReady(name, detectReady, timeoutMs, pollIntervalMs),
+		ensureTmuxAvailable: () => sm.ensureAvailable(),
 	};
 	const nudge = deps._nudge ?? nudgeAgent;
 	const pollIntervalMs = deps._pollIntervalMs ?? ASK_POLL_INTERVAL_MS;
@@ -980,16 +1034,25 @@ async function outputCoordinator(
 	opts: { follow: boolean; lines: number; interval: number; json: boolean },
 	deps: CoordinatorDeps = {},
 ): Promise<void> {
+	const sm = await getSessionManager();
 	const tmux = deps._tmux ?? {
-		createSession,
-		isSessionAlive,
-		checkSessionState,
-		killSession,
-		sendKeys,
-		waitForTuiReady,
-		ensureTmuxAvailable,
+		createSession: (name: string, cwd: string, command: string, env?: Record<string, string>) =>
+			sm.createSession(name, cwd, command, env),
+		isSessionAlive: (name: string) => sm.isSessionAlive(name),
+		checkSessionState: (name: string) => sm.checkSessionState(name),
+		killSession: (name: string) => sm.killSession(name),
+		sendKeys: (name: string, keys: string) => sm.sendKeys(name, keys),
+		waitForTuiReady: (
+			name: string,
+			detectReady: (paneContent: string) => import("../runtimes/types.ts").ReadyState,
+			timeoutMs?: number,
+			pollIntervalMs?: number,
+		) => sm.waitForTuiReady(name, detectReady, timeoutMs, pollIntervalMs),
+		ensureTmuxAvailable: () => sm.ensureAvailable(),
 	};
-	const capturePane = deps._capturePaneContent ?? capturePaneContent;
+	const capturePane =
+		deps._capturePaneContent ??
+		((name: string, lines?: number) => sm.capturePaneContent(name, lines));
 
 	const { follow, lines, interval, json } = opts;
 	const cwd = process.cwd();

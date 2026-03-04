@@ -670,27 +670,23 @@ describe("SaplingRuntime", () => {
 			expect(guards.readOnly).toBe(false);
 		});
 
-		test.each([
-			"scout",
-			"reviewer",
-			"lead",
-			"coordinator",
-			"supervisor",
-			"monitor",
-		])("readOnly is true for %s capability", async (capability) => {
-			const worktreePath = join(tempDir, `wt-${capability}`);
-			await runtime.deployConfig(
-				worktreePath,
-				{ content: "# Overlay" },
-				{
-					agentName: `test-${capability}`,
-					capability,
+		test.each(["scout", "reviewer", "lead", "coordinator", "supervisor", "monitor"])(
+			"readOnly is true for %s capability",
+			async (capability) => {
+				const worktreePath = join(tempDir, `wt-${capability}`);
+				await runtime.deployConfig(
 					worktreePath,
-				},
-			);
-			const guards = await readGuards(worktreePath);
-			expect(guards.readOnly).toBe(true);
-		});
+					{ content: "# Overlay" },
+					{
+						agentName: `test-${capability}`,
+						capability,
+						worktreePath,
+					},
+				);
+				const guards = await readGuards(worktreePath);
+				expect(guards.readOnly).toBe(true);
+			},
+		);
 
 		test("blockedTools = NATIVE_TEAM_TOOLS + INTERACTIVE_TOOLS", async () => {
 			const worktreePath = join(tempDir, "wt");
