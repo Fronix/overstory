@@ -901,8 +901,7 @@ describe("INSTRUCTION_PATH placeholder", () => {
 	test("INSTRUCTION_PATH in base definition replaced throughout (multiple occurrences)", async () => {
 		const config = makeConfig({
 			instructionPath: "AGENTS.md",
-			baseDefinition:
-				"Step 1: read {{INSTRUCTION_PATH}}.\nContext is in {{INSTRUCTION_PATH}}.",
+			baseDefinition: "Step 1: read {{INSTRUCTION_PATH}}.\nContext is in {{INSTRUCTION_PATH}}.",
 		});
 		const output = await generateOverlay(config);
 
