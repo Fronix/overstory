@@ -642,7 +642,7 @@ describe("PiRuntime integration: registry resolves 'pi'", () => {
 
 	test("getRuntime rejects truly unknown runtimes", async () => {
 		const { getRuntime } = await import("./registry.ts");
-		expect(() => getRuntime("opencode")).toThrow('Unknown runtime: "opencode"');
 		expect(() => getRuntime("aider")).toThrow('Unknown runtime: "aider"');
+		expect(() => getRuntime("cursor")).toThrow('Unknown runtime: "cursor"');
 	});
 });
