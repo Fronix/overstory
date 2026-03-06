@@ -667,41 +667,11 @@ async function runLog(opts: {
 
 				// Record session metrics (with optional token data from transcript)
 				if (agentSession) {
-					// Auto-complete the current run when the coordinator exits.
-					// This handles the case where the user closes the tmux window
-					// without running `ov coordinator stop`.
-					if (agentSession.capability === "coordinator") {
-						try {
-							const currentRunPath = join(config.project.root, ".overstory", "current-run.txt");
-							const currentRunFile = Bun.file(currentRunPath);
-							if (await currentRunFile.exists()) {
-								const runId = (await currentRunFile.text()).trim();
-								if (runId.length > 0) {
-									const runStore = createRunStore(
-										join(config.project.root, ".overstory", "sessions.db"),
-									);
-									try {
-										// Only complete the run if it's still active.
-										// Self-exiting coordinators will have already called ov run complete.
-										const run = runStore.getRun(runId);
-										if (run && run.status === "active") {
-											runStore.completeRun(runId, "completed");
-										}
-									} finally {
-										runStore.close();
-									}
-									const { unlink: unlinkFile } = await import("node:fs/promises");
-									try {
-										await unlinkFile(currentRunPath);
-									} catch {
-										// File may already be gone
-									}
-								}
-							}
-						} catch {
-							// Non-fatal: run completion should not break session-end handling
-						}
-					}
+					// NOTE: We intentionally do NOT auto-complete the run here for coordinator agents.
+					// The coordinator's Stop hook fires on every turn boundary, not just at true session exit,
+					// so auto-completing the run here would kill the session after the first turn.
+					// Run completion is handled by: `ov coordinator stop`, `ov run complete` (self-exit),
+					// or the watchdog daemon detecting a dead coordinator process.
 
 					try {
 						const metricsDbPath = join(config.project.root, ".overstory", "metrics.db");
