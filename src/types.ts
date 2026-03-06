@@ -39,6 +39,19 @@ export type TaskTrackerBackend = "auto" | "seeds" | "beads";
 
 // === Project Configuration ===
 
+/**
+ * Conditions that trigger automatic coordinator shutdown.
+ * All triggers default to false for backward compatibility.
+ */
+export interface CoordinatorExitTriggers {
+	/** Exit when all spawned agents have completed and their branches have been merged. */
+	allAgentsDone: boolean;
+	/** Exit when the task tracker reports no unblocked work (sd/bd ready returns empty). */
+	taskTrackerEmpty: boolean;
+	/** Exit when a typed shutdown mail is received from an external caller (e.g., greenhouse). */
+	onShutdownSignal: boolean;
+}
+
 /** A single quality gate command that agents must pass before reporting completion. */
 export interface QualityGate {
 	/** Display name shown in the overlay (e.g., "Tests"). */
@@ -95,6 +108,10 @@ export interface OverstoryConfig {
 	logging: {
 		verbose: boolean;
 		redactSecrets: boolean;
+	};
+	coordinator?: {
+		/** Conditions that trigger automatic coordinator shutdown. */
+		exitTriggers: CoordinatorExitTriggers;
 	};
 	runtime?: {
 		/** Default runtime adapter name (default: "claude"). */
