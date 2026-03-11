@@ -193,6 +193,7 @@ export interface AgentSession {
 	escalationLevel: number; // Progressive nudge stage: 0=warn, 1=nudge, 2=escalate, 3=terminate
 	stalledSince: string | null; // ISO timestamp when agent first entered stalled state
 	transcriptPath: string | null; // Runtime-provided transcript JSONL path (decoupled from ~/.claude/)
+	promptVersion?: string | null; // Canopy prompt version used at sling time (e.g. "builder@17")
 }
 
 // === Agent Identity ===
@@ -712,6 +713,48 @@ export interface MulchCompactResult {
 		recordIds: string[];
 	}>;
 	message?: string;
+}
+
+// === Canopy CLI Results ===
+
+/** A single section within a rendered canopy prompt. */
+export interface CanopyPromptSection {
+	name: string;
+	body: string;
+}
+
+/** Summary of a canopy prompt as returned by list/show. */
+export interface CanopyPromptSummary {
+	id: string;
+	name: string;
+	version: number;
+	sections: CanopyPromptSection[];
+}
+
+/** Result from cn render — resolved prompt with all inheritance applied. */
+export interface CanopyRenderResult {
+	success: boolean;
+	name: string;
+	version: number;
+	sections: CanopyPromptSection[];
+}
+
+/** Result from cn validate — validation status and errors. */
+export interface CanopyValidateResult {
+	success: boolean;
+	errors: string[];
+}
+
+/** Result from cn list — list of all prompts. */
+export interface CanopyListResult {
+	success: boolean;
+	prompts: CanopyPromptSummary[];
+}
+
+/** Result from cn show — single prompt record. */
+export interface CanopyShowResult {
+	success: boolean;
+	prompt: CanopyPromptSummary;
 }
 
 // === Session Lifecycle (Checkpoint / Handoff / Continuity) ===
