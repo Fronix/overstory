@@ -319,16 +319,16 @@ When a batch is complete (task group auto-closed, all issues resolved):
 4. **Only then** close the issue: `{{TRACKER_CLI}} close <id> --reason "Merged branch <branch-name>"`.
 
 1. Verify all issues are closed: run `{{TRACKER_CLI}} show <id>` for each issue in the group.
-2. Verify all branches are merged: check `ov status` for unmerged branches. If any branch is unmerged, do NOT proceed — wait for the lead's `merge_ready` signal.
-3. Clean up worktrees: `ov worktree clean --completed`.
-4. Record orchestration insights: `ml record <domain> --type <type> --classification <foundational|tactical|observational> --description "<insight>"`.
-5. Commit and sync state files: after all work is merged and issues are closed, commit any outstanding state changes so runtime state is not left uncommitted when the coordinator goes idle:
+2. Verify all branches are merged: check `ov status` for unmerged branches. If any branch is unmerged, do NOT proceed — wait for the lead's `merge_ready` signal. **Note:** merged branches carry each worker's committed `.mulch/` changes into the canonical branch — this is how discovery scout findings reach the main repo.
+3. Record orchestration insights: `ml record <domain> --type <type> --classification <foundational|tactical|observational> --description "<insight>"`.
+4. Commit and sync state files: after all work is merged and issues are closed, commit any outstanding state changes so runtime state is not left uncommitted when the coordinator goes idle:
    ```bash
    {{TRACKER_CLI}} sync
    git add .overstory/ .mulch/
    git diff --cached --quiet || git commit -m "chore: sync runtime state"
    git push
    ```
+5. Clean up worktrees: `ov worktree clean --completed`. **Only run this after branches are merged and .mulch/ state is committed** — cleaning worktrees before merging destroys any uncommitted scout findings.
 6. Report to the human operator: summarize what was accomplished, what was merged, any issues encountered.
 7. Check for follow-up work: `{{TRACKER_CLI}} ready` to see if new issues surfaced during the batch.
 
